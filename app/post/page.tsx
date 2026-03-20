@@ -57,7 +57,7 @@ export default function PostJobPage() {
         return;
       }
       const { data } = await supabase.from("users").select("*").eq("id", authUser.id).single();
-      setUser(data);
+      setUser(data as unknown as User | null);
     };
     fetchUser();
   }, []);

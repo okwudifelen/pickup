@@ -3,13 +3,14 @@
 import { createServerActionClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { Database, createSupabaseServerClient } from "./supabase";
+import { createSupabaseServerClient } from "./supabase";
 import { generateFakeTxHash } from "./wallet";
-import { ActionResult, JobCategory } from "@/types";
+import { ActionResult, JobCategory, Job, User, EscrowTransaction } from "@/types";
 
-// Auth-aware client — only used to read the session
+// Auth-aware client — only used to read the session (no DB queries)
 function getSessionClient() {
-  return createServerActionClient<Database>({ cookies });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return createServerActionClient<any>({ cookies });
 }
 
 // Admin client — bypasses RLS, used for all DB writes and reads
@@ -52,10 +53,12 @@ export async function createJob(formData: {
       return { success: false, error: "Could not fetch user data" };
     }
 
-    if (userData.wallet_balance < formData.payment_amount) {
+    const typedUser = userData as Pick<User, "wallet_balance">;
+
+    if (typedUser.wallet_balance < formData.payment_amount) {
       return {
         success: false,
-        error: `Insufficient balance. You have ${userData.wallet_balance} USDC but need ${formData.payment_amount} USDC`,
+        error: `Insufficient balance. You have ${typedUser.wallet_balance} USDC but need ${formData.payment_amount} USDC`,
       };
     }
 
@@ -77,9 +80,11 @@ export async function createJob(formData: {
       return { success: false, error: jobError?.message || "Failed to create job" };
     }
 
+    const typedJob = job as Job;
+
     revalidatePath("/");
     revalidatePath("/dashboard");
-    return { success: true, data: { id: job.id } };
+    return { success: true, data: { id: typedJob.id } };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("[createJob]", msg);
@@ -96,25 +101,30 @@ export async function acceptJob(
 
     const admin = getAdminClient();
 
-    const { data: job, error: jobError } = await admin
+    const { data: jobRaw, error: jobError } = await admin
       .from("jobs")
       .select("*")
       .eq("id", jobId)
       .single();
 
-    if (jobError || !job) return { success: false, error: "Job not found" };
+    if (jobError || !jobRaw) return { success: false, error: "Job not found" };
+
+    const job = jobRaw as Job;
+
     if (job.status !== "open") return { success: false, error: "Job is no longer available" };
     if (job.poster_id === user.id) return { success: false, error: "You cannot accept your own job" };
 
-    const { data: posterData, error: posterError } = await admin
+    const { data: posterRaw, error: posterError } = await admin
       .from("users")
       .select("wallet_balance")
       .eq("id", job.poster_id)
       .single();
 
-    if (posterError || !posterData) {
+    if (posterError || !posterRaw) {
       return { success: false, error: "Could not fetch poster data" };
     }
+
+    const posterData = posterRaw as Pick<User, "wallet_balance">;
 
     if (posterData.wallet_balance < job.payment_amount) {
       return { success: false, error: "Poster has insufficient balance for escrow" };
@@ -186,38 +196,45 @@ export async function markJobComplete(
 
     const admin = getAdminClient();
 
-    const { data: job, error: jobError } = await admin
+    const { data: jobRaw, error: jobError } = await admin
       .from("jobs")
       .select("*")
       .eq("id", jobId)
       .single();
 
-    if (jobError || !job) return { success: false, error: "Job not found" };
+    if (jobError || !jobRaw) return { success: false, error: "Job not found" };
+
+    const job = jobRaw as Job;
+
     if (job.poster_id !== user.id) return { success: false, error: "Only the job poster can mark it as complete" };
     if (job.status !== "in_progress") return { success: false, error: "Job is not in progress" };
     if (!job.acceptor_id) return { success: false, error: "No one has accepted this job" };
 
-    const { data: escrow, error: escrowFetchError } = await admin
+    const { data: escrowRaw, error: escrowFetchError } = await admin
       .from("escrow_transactions")
       .select("*")
       .eq("job_id", jobId)
       .eq("status", "locked")
       .single();
 
-    if (escrowFetchError || !escrow) {
+    if (escrowFetchError || !escrowRaw) {
       console.error("[markJobComplete] escrow fetch:", escrowFetchError);
       return { success: false, error: "Escrow transaction not found" };
     }
 
-    const { data: acceptorData, error: acceptorError } = await admin
+    const escrow = escrowRaw as EscrowTransaction;
+
+    const { data: acceptorRaw, error: acceptorError } = await admin
       .from("users")
       .select("wallet_balance, total_jobs_completed")
       .eq("id", job.acceptor_id)
       .single();
 
-    if (acceptorError || !acceptorData) {
+    if (acceptorError || !acceptorRaw) {
       return { success: false, error: "Could not fetch acceptor data" };
     }
+
+    const acceptorData = acceptorRaw as Pick<User, "wallet_balance" | "total_jobs_completed">;
 
     const releaseTxHash = generateFakeTxHash();
 
@@ -269,13 +286,16 @@ export async function raiseDispute(
 
     const admin = getAdminClient();
 
-    const { data: job, error: jobError } = await admin
+    const { data: jobRaw, error: jobError } = await admin
       .from("jobs")
       .select("*")
       .eq("id", jobId)
       .single();
 
-    if (jobError || !job) return { success: false, error: "Job not found" };
+    if (jobError || !jobRaw) return { success: false, error: "Job not found" };
+
+    const job = jobRaw as Job;
+
     if (job.poster_id !== user.id && job.acceptor_id !== user.id) {
       return { success: false, error: "You are not involved in this job" };
     }
@@ -322,13 +342,16 @@ export async function submitRating(formData: {
 
     const admin = getAdminClient();
 
-    const { data: job, error: jobError } = await admin
+    const { data: jobRaw, error: jobError } = await admin
       .from("jobs")
       .select("*")
       .eq("id", formData.jobId)
       .single();
 
-    if (jobError || !job) return { success: false, error: "Job not found" };
+    if (jobError || !jobRaw) return { success: false, error: "Job not found" };
+
+    const job = jobRaw as Job;
+
     if (job.status !== "completed") return { success: false, error: "Can only rate completed jobs" };
     if (job.poster_id !== user.id && job.acceptor_id !== user.id) {
       return { success: false, error: "You are not involved in this job" };
@@ -399,7 +422,7 @@ export async function getCurrentUser() {
       .eq("id", user.id)
       .single();
 
-    return userData;
+    return userData as User | null;
   } catch {
     return null;
   }

@@ -74,7 +74,7 @@ export default function JobDetailPage() {
         .select("*")
         .eq("id", authUser.user.id)
         .single();
-      setCurrentUser(userData);
+      setCurrentUser(userData as unknown as UserType | null);
 
       // Check if user has already rated
       if (jobData.status === "completed") {

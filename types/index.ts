@@ -81,10 +81,10 @@ export interface Dispute {
 }
 
 export interface JobFilters {
-  category?: JobCategory | "";
+  category?: string;
   minPay?: number | "";
   maxPay?: number | "";
-  status?: JobStatus | "";
+  status?: string;
   search?: string;
 }
 

@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { Navbar } from "@/components/Navbar";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import { Database } from "@/lib/supabase";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,7 +20,8 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const supabase = createServerComponentClient<Database>({ cookies });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createServerComponentClient<any>({ cookies });
 
   const {
     data: { user: authUser },

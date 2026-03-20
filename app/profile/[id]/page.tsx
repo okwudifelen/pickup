@@ -47,7 +47,7 @@ export default function ProfilePage() {
         router.push("/");
         return;
       }
-      setProfile(profileData);
+      setProfile(profileData as unknown as UserType);
 
       if (authUser.user) {
         const { data: currentUserData } = await supabase
@@ -55,7 +55,7 @@ export default function ProfilePage() {
           .select("*")
           .eq("id", authUser.user.id)
           .single();
-        setCurrentUser(currentUserData);
+        setCurrentUser(currentUserData as unknown as UserType | null);
       }
 
       const [{ data: jobsData }, { data: ratingsData }] = await Promise.all([
