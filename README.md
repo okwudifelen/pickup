@@ -2,6 +2,8 @@
 
 > *The gig economy, built for campus. Earn USDC. Get things done.*
 
+🌐 **[pickup.vercel.app](https://pickup-nine-liard.vercel.app/)** ← try it here
+
 **Pickup** connects students who need small tasks done with students who have the skills and time to do them — tutoring, moving boxes, design work, errands, and more. Every transaction is protected by a simulated on-chain escrow system built on Solana, making trust between strangers a non-issue.
 
 ---
